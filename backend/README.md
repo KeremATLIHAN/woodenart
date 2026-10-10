@@ -96,13 +96,21 @@ migrations/
 
 ## Oturum ve yetkilendirme
 
-- Giriş başarılı olduğunda `woodenart_session` adlı **HTTP-only** çerez döner. Frontend bu çerezi `credentials: 'include'` ile taşır.
+- Giriş başarılı olduğunda yedi gün geçerli `woodenart_session` adlı **HTTP-only** çerez döner. Frontend bu çerezi `credentials: 'include'` ile taşır; tarayıcı JavaScript'i çerez değerini okuyamaz.
 - JWT, kullanıcı kimliğini subject (`sub`) alanında taşır. Her korumalı istekte middleware token'ı doğrular ve kullanıcıyı DB'den yeniden okur.
 - `requireAuth`: geçerli oturum ister.
 - `requireAdmin`: oturuma ek olarak `u_role === 1` ister.
 - İstek gövdesindeki `userId` yetki kaynağı değildir. Kaynak, doğrulanmış oturumdaki `req.user.u_id` değeridir.
 - CORS yalnız yapılandırılmış frontend origin'lerine credential erişimi açar. Yeni frontend host'u kullanılırsa `FRONTEND_URL` ayarlanıp backend yeniden başlatılmalıdır.
 - Çıkış endpoint'i oturum çerezini temizler.
+
+### Kalıcı kullanıcı verileri ve istemci sepeti
+
+- Profil ve kimlik bilgileri `users` tablosundadır; korumalı API her istekte HTTP-only çerezi doğrular ve kullanıcıyı DB'den bulur. Yedi günlük süre dolunca veya hesap silinince oturum artık geçerli sayılmaz.
+- Sepet backend DB'sinde saklanmaz. Frontend her tarayıcı profilinde `localStorage` içindeki `woodenart_cart_<u_id>` anahtarını kullanır; ziyaretçi sepeti `woodenart_cart_guest` anahtarındadır. Bu nedenle yenileme ve aynı tarayıcıdaki farklı hesap oturumları sepeti kaybettirmez/hesaplar arasında karıştırmaz; farklı cihaz eşitlemesi veya tarayıcı verisini temizledikten sonra geri yükleme sunulmaz.
+- `adresses` tablosundaki kaydedilmiş adresler `u_id` ile kullanıcıya bağlıdır ve yalnız oturumdaki kullanıcı tarafından listelenip değiştirilebilir. Checkout kullanıcı adresini açıkça kaydettiğinde bu API'yi çağırır.
+- `orders` tablosu sipariş kaydıdır. Oturumlu siparişte kullanıcı ID'si istek gövdesinden değil, doğrulanmış oturumdan alınır. Sipariş okuma endpoint'i admin'e tüm kayıtları, kullanıcıya yalnız kendi `u_id` kayıtlarını döndürür.
+- Checkout form taslağı ve kart bilgileri DB/localStorage kalıcılığına sahip değildir. Kart numarası, son kullanma tarihi ve CVV `/api/orders` payload'ında bulunmaz; backend bunları tahsil etmez/doğrulamaz. Gerçek ödeme entegrasyonu bu uygulamanın kapsamı dışındadır.
 
 ## API kataloğu
 
@@ -175,7 +183,24 @@ Doğrudan/doğrulamasız parola güncelleme endpoint'i sunulmaz. Payload, sürel
 | `PUT` | `/api/orders/:id` | Admin | Sipariş numarası, tutar, tarih ve durumunu günceller |
 | `DELETE` | `/api/orders/:id` | Admin | Siparişi siler |
 
-`o_products` ve `o_pid` alanları sepet adedi kadar tekrar eden ürün adı/ID dizilerini JSON olarak saklar. Sipariş tutarı istemciden alınmaz; backend ürün fiyatlarından hesaplayıp %20 KDV ekler. Üye siparişlerini `users.u_id` ile ilişkilendirmek için [`20261010_link_orders_to_users.sql`](./migrations/20261010_link_orders_to_users.sql) migration'ı, KDV dahil tutarı kuruş hassasiyetinde saklamak için de [`20261010_store_order_amount_with_vat.sql`](./migrations/20261010_store_order_amount_with_vat.sql) migration'ı uygulanmalıdır. Misafir siparişlerinde `u_id` boş kalır.
+`o_products` ve `o_pid` alanları her ürün adedi için tekrar eden ürün adı/ID dizilerini JSON olarak saklar. `o_amount` istemciden kabul edilmez: backend `products` tablosundaki güncel fiyatları kuruş hassasiyetine yuvarlar, miktarla çarpar ve %20 KDV ekler. Sipariş başlangıç durumu `Hazirlaniyor` olur. Üye siparişlerini `users.u_id` ile ilişkilendirmek için [`20261010_link_orders_to_users.sql`](./migrations/20261010_link_orders_to_users.sql) migration'ı, KDV dahil tutarı kuruş hassasiyetinde saklamak için de [`20261010_store_order_amount_with_vat.sql`](./migrations/20261010_store_order_amount_with_vat.sql) migration'ı uygulanmalıdır. Misafir API siparişlerinde `u_id` boş kalır; mevcut frontend checkout rotası oturum gerektirir.
+
+#### Sipariş oluşturma ve stok transaction'ı
+
+`POST /api/orders` isteği `sepet` dizisi ile `order` adres/iletişim bilgilerini alır. Oturum middleware'i opsiyoneldir; varsa `u_id`, ad ve soyad sunucuda oturum kullanıcısından alınır. Misafir API çağrısı ad ve soyadı payload'dan ister. Her iki durumda da kayıtlı ürün fiyatı/ismi/stoğu yalnızca `products` tablosundan okunur.
+
+1. Sepet boş olamaz, en fazla 100 kayıt içerebilir. `p_id` pozitif tam sayı; `adet` (yoksa 1 kabul edilir) pozitif tam sayı olmalı ve aynı ürünün birleştirilmiş adedi 100'ü aşmamalıdır.
+2. Backend ad/soyadın bulunmasını ve toplamının 50 karakteri aşmamasını; açık adres, ülke, il, ilçe ve posta kodunun dolu olmasını, birleştirilmiş sipariş adresinin 200 karakteri geçmemesini kontrol eder. Checkout'taki kart numarası, CVV, son kullanma tarihi ve TCKN bu order handler tarafından doğrulanmaz veya sipariş verisine yazılmaz.
+3. Bağlantı transaction başlatır; sepetteki DB ürünlerini `SELECT ... FOR UPDATE` ile kilitler. Ürün artık yoksa sipariş reddedilir. `p_stock > 0` için adet stoktan fazla olamaz. `p_stock <= 0` sipariş verilebilir ürün için aynı sipariş içinde en fazla bir adet kabul edilir.
+4. Tutar DB'deki ürün fiyatları üzerinden hesaplanır; stoklu ürünler için `p_stock = p_stock - adet` güncellemesi `p_stock >= adet` koşuluyla çalışır. Stoku sıfır/negatif sipariş verilebilir ürünlerde stok azaltımı yapılmaz.
+5. Stok güncellemesi ve `orders` insert'i aynı transaction içindedir. Herhangi bir hata/uyuşmazlıkta rollback stok değişikliklerini de geri alır; başarılı insert sonrasında commit edilir ve HTTP `201` döner. Stok yetersizliği `409`, geçersiz payload `400` döner.
+6. Frontend yalnız başarılı yanıtı aldıktan sonra sepeti temizler. API isteği başarısızsa veya stok değişmişse sepet kullanıcının tarayıcısında kalır ve kullanıcı düzeltip yeniden deneyebilir.
+
+Checkout'ta görünen kart alanları şu an gerçek bir ödeme adımına bağlı değildir. İstemci posta kodu/kart biçimini doğrular fakat bu alanları sipariş API'sine göndermez; sunucu tarafında ödeme veya kart doğrulaması yapılmaz.
+
+### Kayıtlı teslimat adresleri
+
+`GET /api/addresses`, `POST /api/addresses`, `PUT /api/addresses/:id` ve `DELETE /api/addresses/:id` oturum gerektirir. Her sorgu `req.user.u_id` ile kapsamlandırılır; başka kullanıcının adresi listelenemez, düzenlenemez veya silinemez. Kayıt/güncelleme TCKN için tam 11 rakam; başlık için 1-50, ülke/il/ilçe için 1-100 ve açık adres için 1-1000 karakter kontrolü yapar. Posta kodu 1-20 harf/rakam/boşluk/tire karakteri kabul eder. Ülke `countries` tablosunda olmalıdır. Kullanıcı başına en fazla 3 adres ve yinelenmeyen adres başlığı uygulanır. Mevcut frontend adres ekranında ekleme/silme, checkout'ta yeni başlıklı adres kaydetme vardır; kayıtlı adresin düzenlenmesi için backend `PUT` endpoint'i mevcut olsa da arayüzde düzenleme akışı sunulmaz.
 
 ## Sayfa ve modal akışları
 

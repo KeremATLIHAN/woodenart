@@ -65,6 +65,19 @@ src/
 
 `App.vue`, sepeti Vue reactivity ile oluşturup `provide('sepet', ...)` üzerinden ilgili sayfa ve bileşenlere verir. Sepet bileşenleri aynı reaktif diziyi paylaşır; kalıcı saklama ve kullanıcı anahtarı da uygulama kabuğunda yönetilir.
 
+### Hangi veri nerede saklanır?
+
+| Veri | Saklama yeri | Yenileme/hesap değişimi |
+|---|---|---|
+| Kimlik doğrulama | Backend imzalı `woodenart_session` HTTP-only çerezi (7 gün) | JavaScript okuyamaz; uygulama açılışında/route geçişlerinde `/api/auth/me` ile doğrulanır. Eski `localStorage`/`sessionStorage` rol ve kullanıcı ID anahtarları kimlik kaynağı değildir ve temizlenir. |
+| Kullanıcı profili | MySQL `users` | Yenileme ve yeni oturumda doğrulanmış kullanıcı ID'si üzerinden sunucudan alınır. |
+| Sepet | Tarayıcı `localStorage` | `woodenart_cart_<u_id>` kullanıcıya, `woodenart_cart_guest` misafire aittir. Aynı profil ve cihazda yenileme/çıkış/giriş sonrasında ayrı sepetler açılır; hesaplar birbirine aktarılmaz. |
+| Kayıtlı teslimat adresleri | MySQL `adresses`, `u_id` ile kullanıcıya bağlı | Oturum açılınca API'den tekrar yüklenir. Checkout'ta yeni bir başlık seçilip kaydetme kutusu işaretlenirse adres eklenir; mevcut kayıtlı başlıkta kutu devre dışıdır. |
+| Oluşturulmuş siparişler | MySQL `orders` | `u_id` olan siparişler hesabın sipariş listesinde görünür; liste yetkisi sunucuda uygulanır. |
+| Checkout taslağı ve kart alanları | Kalıcı olarak saklanmaz | Yenilemede kaydedilmemiş form alanları kaybolabilir. Kart numarası, son kullanma tarihi ve CVV API'ye gönderilmez ve projede saklanmaz. |
+
+`localStorage` yalnızca o tarayıcı profilinde/cihazda kullanılabilir; başka tarayıcı/cihazla eşitlenmez. Tarayıcı site verisinin veya ilgili sepet anahtarının elle temizlenmesi sepeti siler. Bu nedenle sepeti kullanıcı hesabına bağlı olarak sunucuda yedekleyen bir API mevcut değildir. Uygulamanın ilk sürümündeki ortak `woodenart_cart` anahtarı bir kez etkin sepet sahibinin anahtarına taşınır.
+
 ## Sayfalar ve gezinme
 
 | Yol | Görünüm | İşlev |
@@ -92,16 +105,16 @@ Sayfalar geliştirme ortamında backend için `http://localhost:3001` kullanır.
 ### Oturum
 
 - Giriş modalı `POST /api/login` çağırır.
-- Kimlik doğrulamasının esas kaynağı backend'in HTTP-only oturum çerezidir; router her sayfa geçişinde `/api/auth/me` ile bunu doğrular.
-- `sessionStorage` içindeki `userId`, sepet anahtarını seçmek ve arayüzde rol/kullanıcı bilgisini taşımak için kullanılır; backend yetkilendirmesinin yerine geçmez.
-- Çıkış, sunucudaki oturumu kapatır ve frontend oturum önbelleğini temizler.
+- Başarıda sunucu yedi günlük HTTP-only `woodenart_session` çerezi verir. Uygulama açılışında ve route geçişlerinde router `/api/auth/me` ile oturumu doğrular; frontend kullanıcı ID'si/rolü yetki kararı olarak göndermez.
+- Eski `sessionStorage`/`localStorage` içindeki rol, kullanıcı ID'si ve benzeri kimlik cache'leri uygulama başlarken temizlenir. Sepet sahipliği doğrulanmış `/api/auth/me` profilindeki `u_id` ile belirlenir.
+- Çıkış sunucu oturum çerezini temizler, kullanıcı cache'ini sıfırlar ve ortak reaktif sepeti misafir sepetiyle değiştirir; önceki kullanıcının ayrı `localStorage` sepetini silmez.
 
 ### Sepet
 
-- Kullanıcı sepeti `localStorage` içinde `woodenart_cart_<u_id>`, oturumsuz ziyaretçi sepeti `woodenart_cart_guest` anahtarıyla kalıcı tutulur.
-- Sayfa yenilemesinde aynı sepet yüklenir. Farklı kullanıcıya geçildiğinde o kullanıcıya ait sepet açılır; sepetler birbirine aktarılmaz.
-- Eski `woodenart_cart` anahtarı ilk yüklemede etkin kullanıcı/ziyaretçi anahtarına taşınır.
-- Sepet görünümü, ürün kartları ve ödeme ekranı aynı reaktif sepeti kullanır. Stok üst sınırı hem ürün ekleme hem miktar artırma sırasında kontrol edilir.
+- Uygulama `App.vue` içindeki tek reaktif sepeti `provide/inject` ile sepet, ürün kartı ve checkout'a verir; derin değişiklikler etkin sahibin `localStorage` anahtarına JSON olarak yazılır.
+- Uygulama açılışında geçerli kullanıcı ilk route doğrulamasıyla belirlenir. Hesap/guest sahibi değişince mevcut sepet önce eski anahtara yazılır, sonra yeni sahibin sepeti yüklenir. Aynı tarayıcı profilinde sayfa yenileme veya hesaplar arasında geçiş sepetleri birleştirmez/silmez.
+- Önceki ortak `woodenart_cart` anahtarı ilk okumada etkin sahibi için yeni anahtara taşınır; geçersiz JSON veya depolama verisi yüklenirken ilgili cart kaydı temizlenerek boş diziye dönülür.
+- Katalogdaki stoklu ürün miktarı ve sepet artışı mevcut adetle birlikte `p_stock` değerini aşamaz. Stok değeri `0` veya altındaki sipariş verilebilir ürün sepete en fazla 1 adet eklenebilir. Bu UI sınırı sipariş sırasında backend'in kilitli DB kontrolünün yerini almaz.
 
 ### Ürün katalogları ve arama
 
@@ -155,9 +168,20 @@ Arama düğmesi görsel olarak yalnızca ikon gösterir; ekran okuyucular için 
 3. Sayfayı yenileyin; ürünler kaybolmamalıdır.
 4. Kullanıcı A ve B ile ayrı giriş yapıp sepetlerin birbirinden izole olduğunu kontrol edin. Çıkıştan sonra misafir sepeti yüklenmelidir.
 5. Adet artırma stok sınırını geçmemeli; adet azaltma/silme toplam tutarı güncellemelidir.
-6. Boş sepet ödeme adımına geçememelidir. Oturumlu kullanıcı sepetten checkout'a ilerleyebilir.
-7. Checkout formu posta kodunda 5-6 rakam, kart numarasında 16 rakam, son kullanma tarihinde `AA/YYYY` (ay `01`-`12`), CVV'de 3 rakam bekler; geçersiz değerlerde sipariş gönderilmez.
-8. Bu kontroller biçim doğrulamasıdır; gerçek kartı doğrulamaz ve ödeme işlemi gerçekleştirmez. Sipariş tutarı backend tarafından ürün fiyatlarından hesaplanır.
+6. Kullanıcı A'nın sepetinde ürün varken çıkış yapıp kullanıcı B ile giriş yapın; B'nin sepeti ayrı yüklenmeli, A'nın sepeti A tekrar giriş yapınca geri gelmelidir. Misafir sepeti de kullanıcı sepetleriyle karışmamalıdır.
+7. Sayfayı yenileyin: etkin sahibin sepeti korunmalı; DB'de kaydedilmiş kullanıcı profili, adresleri ve siparişleri backend'den tekrar yüklenmelidir.
+8. Boş sepet ödeme adımına geçememeli; `/checkout` oturum gerektirmelidir. Checkout sayfasındaki henüz kaydedilmemiş adres/form taslağının yenilemede korunmadığını doğrulayın.
+9. Checkout alanlarında tarayıcı zorunlu alan kontrollerine ek olarak posta kodu 5-6 rakam, kart numarası 16 rakam, son kullanma tarihi `AA/YYYY` (ay `01`-`12`) ve CVV 3 rakam biçimiyle sınanmalıdır.
+10. Kart verisinin `POST /api/orders` gövdesinde bulunmadığını doğrulayın. Gerçek kart doğrulaması/ödeme sağlayıcısı yoktur; kart alanlarını doldurmak para tahsil edildiği anlamına gelmez.
+11. Ürün fiyatını/değişen stoğu tarayıcı payload'ında değiştirerek sipariş tutarı ve stok kararının DB değerlerinden verildiğini doğrulayın. Stok/API hatasında sepet korunmalı; başarılı `201` yanıtından sonra temizlenmelidir.
+12. Kayıtlı adres yüklenmesini, yeni adres eklemeyi, mevcut adresi güncellemeyi ve hesaplar arasında adreslerin sızmamasını kontrol edin.
+
+### İstemci checkout doğrulamaları ve sınırları
+
+- Posta kodu: 5 veya 6 ASCII rakam. Kart numarası: 16 rakam; ekranda dörderli boşlukla gösterilebilir. Son kullanma tarihi: `AA/YYYY` ve ay `01`-`12`. CVV: 3 rakam. Giriş sırasında rakam dışı karakterler temizlenir, alanlar uzunluklarına göre kırpılır.
+- Form ayrıca ad, soyad, TCKN, açık adres, ülke, il, ilçe, ödeme türü ve kart adı gibi alanlarda HTML `required` kontrolü kullanır. E-posta ve telefon formda isteğe bağlıdır.
+- Bu checkout helper'ları gerçek kart varlığını, Luhn kontrolünü veya son kullanma yılının gelecekte olmasını doğrulamaz. Kart alanları sunucuya aktarılmadığından bu sadece demo biçim kontrolüdür; ödeme sağlayıcısı entegrasyonu değildir.
+- Adres defterine kaydetme API'si ayrıca TCKN'nin 11 rakam olmasını, başlık/ülke/il/ilçe/adres uzunluklarını, ülkenin `countries` tablosunda bulunmasını, aynı başlığın tekrar etmemesini ve kullanıcı başına en fazla 3 adresi kontrol eder. Checkout'ta kayıtlı başlıkların adresi otomatik doldurulur; mevcut adresi düzenleme akışı kullanıcı arayüzünde sunulmaz.
 
 ### Siparişler ve yönetim tabloları
 
