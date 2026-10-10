@@ -1,0 +1,2 @@
+ALTER TABLE orders
+  MODIFY o_amount DECIMAL(10, 2) NOT NULL;

@@ -1,0 +1,13 @@
+@import './base.css';
+
+html,
+body,
+#app {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+a {
+  text-decoration: none;
+}
