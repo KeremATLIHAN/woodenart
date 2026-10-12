@@ -700,7 +700,10 @@ export default {
     },
     async openSearchResult(product) {
       this.searchSubmitted = false;
-      await this.$router.push({ path: product.path, query: { search: this.search.trim() } });
+      await this.$router.push({
+        path: product.path,
+        query: { search: this.search.trim(), p_id: product.p_id }
+      });
     },
     async requestResetCode() {
       if (this.resetLoading) return;

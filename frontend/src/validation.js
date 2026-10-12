@@ -88,7 +88,9 @@ export function validateExpirationDate(value) {
     if (!match) return ["Son kullanma tarihini AA/YYYY biçiminde giriniz."];
 
     const month = Number(match[1]);
+    const year = Number(match[2]);
     if (month < 1 || month > 12) return ["Ay 01 ile 12 arasında olmalıdır."];
+    if (year < new Date().getFullYear()) return ["Yıl bu yıldan önce olamaz."];
     return [];
 }
 

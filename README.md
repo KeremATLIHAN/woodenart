@@ -10,6 +10,10 @@ Woodenart, Vue 3 ve Vite ile oluşturulmuş bir vitrin/yönetim arayüzü ve Exp
 - `backend/tests/`: Backend akış testleri.
 - Kurulum ve kontroller: [frontend rehberi](./frontend/README.md) ve [backend rehberi](./backend/README.md).
 
+## Arayüz markası
+
+Tarayıcı sekmesinde görünen sayfa başlığı `Woodenart`, sekme simgesi ise `frontend/src/assets/img/woodenart3.png` marka görselidir. Her ikisi de `frontend/index.html` içindeki `<title>` ve `rel="icon"` tanımlarından yönetilir.
+
 ## Gereksinimler ve kurulum
 
 - Node.js: backend için 22 veya üzeri; frontend için `frontend/package.json` içindeki engines aralığı.
@@ -38,7 +42,7 @@ npm install
 
 ```powershell
 cd backend
-npm run dev
+node server.js
 ```
 
 ```powershell
@@ -71,7 +75,7 @@ E-posta gönderimi Gmail SMTP ile yapılır. `backend/.env` içinde `SMTP_USER` 
 
 - **Hesap/profil:** kullanıcı bilgileri MySQL'deki `users` tablosundadır. Kimlik doğrulaması tarayıcıdaki JavaScript değişkenlerinden veya `sessionStorage` içindeki eski rol/kullanıcı anahtarlarından yapılmaz; geçerli HTTP-only çerez sunucuda DB'ye karşı doğrulanır. Sayfa yenilemesi geçerli çerezi silmez.
 - **Sepet:** ürünler `localStorage` içinde `woodenart_cart_<u_id>` anahtarıyla kullanıcı başına, `woodenart_cart_guest` anahtarıyla oturumsuz ziyaretçi için tutulur. Böylece aynı tarayıcı profilinde çıkış yapıp başka kullanıcıyla girişte önceki hesabın sepeti silinmez veya yeni hesaba karışmaz; o hesabın kendi anahtarı tekrar açılır.
-- **Adresler:** kullanıcı açıkça kaydettiğinde `adresses` tablosuna `u_id` ile yazılır ve sonraki giriş/yenilemede `GET /api/addresses` ile alınır. Checkout'taki **Bu bilgileri bir sonraki sefere kaydet** seçeneği yeni bir adres başlığıyla adres ekler; mevcut kayıtlı adres başlıklarında kutu devre dışıdır.
+- **Adresler:** kullanıcıya ait adresler `adresses` tablosunda `u_id` ile saklanır ve sonraki giriş/yenilemede `GET /api/addresses` ile alınır. Kullanıcı alanından adres eklenebilir, güncellenebilir veya silinebilir. Checkout, kayıtlı adresi seçince alanları doldurur; değişikliklerin aynı kayıtlı adrese yazılması için **Değişiklikleri kayıtlı adresime uygula** seçeneği işaretlenmelidir. Kayıtlı olmayan adres başlığı için **Bu bilgileri bir sonraki sefere kaydet** yeni adres oluşturur.
 - **Siparişler:** başarıyla oluşturulan sipariş `orders` tablosuna yazılır. Oturumlu sipariş `u_id` ile kullanıcı hesabına bağlanır; kullanıcılar kendi siparişlerini, admin tüm siparişleri görür. Eski/misafir kayıtlarının kullanıcı bağlantısı olmayabilir.
 - **Otomatik olarak korunmayanlar:** sepet dışındaki checkout formu taslağı (ör. henüz kaydedilmemiş adres) yenilemede tutulmaz. Kart numarası, son kullanma tarihi ve CVV `localStorage`'a ya da backend'e gönderilmez; yalnızca formdaki biçim kontrolünde kullanılır.
 - `localStorage` yalnızca aynı tarayıcı profili/cihaz içindir; farklı tarayıcıya/cihaza senkronize olmaz ve tarayıcı site verileri temizlenirse silinir. Sepetin uygulama sunucusuna yedeklenmesi bu projede uygulanmamıştır.
@@ -88,14 +92,14 @@ E-posta gönderimi Gmail SMTP ile yapılır. `backend/.env` içinde `SMTP_USER` 
 1. Navbar aramasına kelime veya birden fazla kelime yazıp arama ikonuna basılır ya da form Enter ile gönderilir.
 2. Arama `GET /api/productPage?type=1`, `type=2` ve `type=3` kataloglarını tarar: ürünler, devam eden çalışmalar ve araçlar.
 3. Eşleştirme ürün adına göre yapılır; Türkçe harf/aksan farklılıkları normalize edilir ve girilen bütün arama terimleri ad içinde bulunmalıdır.
-4. Sonuç seçilince ilgili katalog sayfası açılır ve arama terimine uyan ürünler gösterilir. Katalog kartı mevcut ürün/çalışma galerisi akışını kullanır.
+4. Bir sonuç seçilince ilgili katalog sayfası `search` ve seçilen ürünün `p_id` değeriyle açılır; listede yalnızca tıklanan ürün kalır. Katalog kartı mevcut ürün/çalışma galerisi akışını kullanır. Katalog sayfası sadece arama metniyle açılırsa metne uyan bütün ürünler gösterilir.
 
 ### Sepet, checkout ve sipariş/stok akışı
 
 1. Ürün kataloğundan sepete eklenen kayıtlar uygulama kabuğundaki ortak Vue reaktif sepetine eklenir. Sepet bu değişikliklerde `localStorage`'a yazılır ve sayfa yeniden açıldığında ilgili `u_id` veya `guest` anahtarından yüklenir. Sepet sahipliği sunucunun doğruladığı kullanıcı oturumundan belirlenir.
 2. Stoklu ürünlerde katalog/modal adet seçimi ve sepet artırma, sepetteki mevcut adet dahil `p_stock` sınırını aşamaz. Stok değeri `0` veya altındaki sipariş verilebilir ürünler için arayüz en fazla 1 adet eklemeye izin verir. Bu istemci sınırları kolaylık içindir; sipariş anındaki kesin stok kontrolü backend'de tekrarlanır.
-3. `/checkout` oturum gerektirir. Kullanıcı profili ve kayıtlı teslimat adresleri yenilemede backend'den tekrar yüklenir. Adres yalnız kullanıcı kaydetme seçeneğini işaretlediğinde DB'de oluşturulur; checkout'ta henüz kaydedilmemiş alanlar form taslağı olarak kalır.
-4. Checkout boş sepeti durdurur; tarayıcı zorunlu alan kontrollerine ek olarak posta kodunda 5-6 rakam, kartta 16 rakam, son kullanma tarihinde `AA/YYYY` ve `01`-`12` ay, CVV'de 3 rakam biçimleri kontrol edilir. Kart verisi sipariş isteğine dahil edilmez. Bu uygulama gerçek kart doğrulaması, ödeme sağlayıcısı bağlantısı veya para tahsilatı yapmaz.
+3. `/checkout` oturum gerektirir. Kullanıcı profili ve kayıtlı teslimat adresleri yenilemede backend'den tekrar yüklenir. Kayıtlı başlık seçilince adres alanları doldurulur; değişiklikleri kayıtlı adrese yazmak için **Değişiklikleri kayıtlı adresime uygula** seçeneği işaretlenir. Kayıtlı olmayan başlıkta **Bu bilgileri bir sonraki sefere kaydet** seçeneği yeni bir adres kaydeder. İşaretli seçenek varsa adres `PUT`/`POST /api/addresses` ile sipariş isteğinden önce kaydedilir; hata olursa sipariş oluşturulmaz. İşaretlenmemiş form değişiklikleri kayıtlı adrese yazılmaz.
+4. Checkout boş sepeti durdurur; tarayıcı zorunlu alan kontrollerine ek olarak posta kodunda 5-6 rakam, kartta 16 rakam, son kullanma tarihinde `AA/YYYY`, `01`-`12` ay ve içinde bulunulan takvim yılından eski olmayan yıl, CVV'de 3 rakam biçimleri kontrol edilir. Yalnızca yılın geçerli yılın altında olmaması denetlenir; geçerli yıl içindeki ayın geçmişte kalıp kalmadığı doğrulanmaz. Kart verisi sipariş isteğine dahil edilmez. Bu uygulama gerçek kart doğrulaması, ödeme sağlayıcısı bağlantısı veya para tahsilatı yapmaz.
 5. Frontend `POST /api/orders` isteğine sepet ürün kimliklerini/adetlerini ve teslimat bilgilerini gönderir. Backend ürün adı, fiyatı ve stoğu `products` tablosundan yeniden okur; istemciden gönderilen fiyatı esas almaz. Ürün miktarları pozitif tam sayı ve ürün başına en fazla 100 olmalı; sipariş en fazla 100 sepet kaydı içerebilir. Ad/soyad ve zorunlu adres bileşenleri ayrıca sunucuda doğrulanır.
 6. Backend InnoDB transaction başlatır, seçilen ürün satırlarını `SELECT ... FOR UPDATE` ile kilitler, mevcut stoğu denetler ve sipariş tutarını veritabanı fiyatlarından kuruş hassasiyetinde hesaplayıp %20 KDV ekler. `p_stock > 0` olan ürünlerin stoğu koşullu `UPDATE ... p_stock >= adet` sorgusuyla azaltılır; stok `0` veya altındaki sipariş verilebilir ürünler stoktan düşülmez ve en fazla bir adet kabul edilir.
 7. Stok azaltımı veya sipariş kaydı başarısız olursa transaction geri alınır; böylece kısmi stok düşümü kalmaz. Başarıda sipariş `orders` tablosuna, `Hazirlaniyor` durumuyla ve oturumlu kullanıcının `u_id` değeriyle kaydedilir. Frontend sepeti yalnızca başarılı API yanıtından sonra boşaltır; API/stok hatasında sepet korunur.
@@ -127,6 +131,8 @@ E-posta gönderimi Gmail SMTP ile yapılır. `backend/.env` içinde `SMTP_USER` 
 | Mesajları listeleme | `GET /api/messages` | Admin oturumu |
 | Mesaja e-posta yanıtı | `POST /api/messages/:id/reply` | Admin oturumu |
 | Mesaj durumu/silme | `PUT /api/messages/:id`, `DELETE /api/messages/:id` | Admin oturumu |
+
+Admin panelinde **Kullanıcılar** ve **Mesajlar** tablolarının başındaki `#` değerleri geçerli listede satırın sıra indeksidir; gerçek `u_id`/`m_id` değildir. İşlemler arka planda gerçek birincil anahtarlarla yapılır. Ürün ve sipariş gibi diğer yönetim tablolarında ID sütunu doğrudan kaydın veritabanı kimliğini gösterir.
 
 ## Veritabanı ve migration
 

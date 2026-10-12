@@ -55,7 +55,7 @@ Gerçek şifreleri, JWT anahtarını veya `.env` içeriğini README'ye, kaynak k
 Geliştirme:
 
 ```powershell
-npm run dev
+node server.js
 ```
 
 Üretim:
@@ -139,6 +139,8 @@ migrations/
 | `PUT` | `/api/users/:id` | Admin | Kullanıcı profilini/opsiyonel parolasını günceller |
 | `DELETE` | `/api/users/:id` | Admin | Kullanıcı siler |
 
+Admin kullanıcı tablosundaki `#1`, `#2` gibi değerler yalnız frontend'in gösterdiği mevcut liste sıra indeksleridir; endpoint'lere gönderilen `:id` gerçek kullanıcı `u_id` değeridir. Sıra indeksi kalıcı değildir ve kayıt kimliği olarak kullanılmamalıdır.
+
 Yeni parolalar kayıt, yönetici hesabı ekleme ve parola sıfırlamada scrypt ile hash'lenir. Login, eski düz metin parolalı kayıtları geriye dönük uyumluluk için doğrulayabilir. Geçiş tamamlanana kadar düz metin kayıtlar mevcut olabilir.
 
 ### Ürün yönetimi
@@ -164,6 +166,8 @@ Yeni parolalar kayıt, yönetici hesabı ekleme ve parola sıfırlamada scrypt i
 | `DELETE` | `/api/messages/:id` | Admin | Mesajı siler |
 
 İletişim telefon ülke kodu ve telefonla birleştirilerek `messages.m_tel` alanında saklanır; tabloda ayrı `m_code` alanı yoktur. Mesaj durumu başlangıçta `0` (yanıtsız), e-posta yanıtı başarıyla gönderildikten sonra `1` (yanıtlandı) olur.
+
+Admin mesaj tablosundaki `#1`, `#2` gibi değerler API yanıt listesindeki satır sıra indeksini gösterir; `/api/messages/:id`, yanıt, durum güncelleme ve silme işlemleri gerçek veritabanı `m_id` birincil anahtarını kullanır. Ürünler ve siparişler gibi diğer yönetim tablolarındaki ID sütunlarıysa gerçek veritabanı ID'sini gösterir.
 
 ### Parola sıfırlama
 
@@ -200,7 +204,9 @@ Checkout'ta görünen kart alanları şu an gerçek bir ödeme adımına bağlı
 
 ### Kayıtlı teslimat adresleri
 
-`GET /api/addresses`, `POST /api/addresses`, `PUT /api/addresses/:id` ve `DELETE /api/addresses/:id` oturum gerektirir. Her sorgu `req.user.u_id` ile kapsamlandırılır; başka kullanıcının adresi listelenemez, düzenlenemez veya silinemez. Kayıt/güncelleme TCKN için tam 11 rakam; başlık için 1-50, ülke/il/ilçe için 1-100 ve açık adres için 1-1000 karakter kontrolü yapar. Posta kodu 1-20 harf/rakam/boşluk/tire karakteri kabul eder. Ülke `countries` tablosunda olmalıdır. Kullanıcı başına en fazla 3 adres ve yinelenmeyen adres başlığı uygulanır. Mevcut frontend adres ekranında ekleme/silme, checkout'ta yeni başlıklı adres kaydetme vardır; kayıtlı adresin düzenlenmesi için backend `PUT` endpoint'i mevcut olsa da arayüzde düzenleme akışı sunulmaz.
+`GET /api/addresses`, `POST /api/addresses`, `PUT /api/addresses/:id` ve `DELETE /api/addresses/:id` oturum gerektirir. Her sorgu `req.user.u_id` ile kapsamlandırılır; başka kullanıcının adresi listelenemez, düzenlenemez veya silinemez. Kayıt/güncelleme TCKN için tam 11 rakam; başlık için 1-50, ülke/il/ilçe için 1-100 ve açık adres için 1-1000 karakter kontrolü yapar. Posta kodu 1-20 harf/rakam/boşluk/tire karakteri kabul eder. Ülke `countries` tablosunda olmalıdır. Kullanıcı başına en fazla 3 adres ve yinelenmeyen adres başlığı uygulanır.
+
+Frontend'de kullanıcı `/user` içindeki Adresler bölümünden yeni adres ekleyebilir, kayıtlı adresin **Güncelle** düğmesiyle mevcut değerlerini forma alabilir ve `PUT /api/addresses/:id` ile kaydedebilir. Düzenleme iptal edilebilir; mevcut adres güncellemesi üç kayıtlı adres sınırına takılmaz. Checkout'ta kayıtlı adres başlığı seçilince alanlar otomatik dolar. **Değişiklikleri kayıtlı adresime uygula** seçeneği işaretlenirse checkout siparişi göndermeden önce aynı `PUT` endpoint'ini çağırır; seçenek işaretlenmediyse sipariş için formda yapılan değişiklikler adres defterine yazılmaz. Kayıtlı olmayan başlıkta **Bu bilgileri bir sonraki sefere kaydet** seçeneği yeni adresi `POST /api/addresses` ile ekler. Her iki ekran da oturum çerezini gönderir; kullanıcı kapsamını backend belirler.
 
 ## Sayfa ve modal akışları
 

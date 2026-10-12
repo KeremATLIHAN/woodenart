@@ -31,7 +31,13 @@ export default {
     searchQuery() {
       return typeof this.$route.query.search === 'string' ? this.$route.query.search : '';
     },
+    selectedProductId() {
+      return typeof this.$route.query.p_id === 'string' ? this.$route.query.p_id : '';
+    },
     filteredProducts() {
+      if (this.selectedProductId) {
+        return this.products.filter((product) => String(product.p_id) === this.selectedProductId);
+      }
       return this.searchQuery
         ? this.products.filter((product) => productNameMatches(product.p_name, this.searchQuery))
         : this.products;

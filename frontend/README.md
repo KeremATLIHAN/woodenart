@@ -25,7 +25,7 @@ npm install
 npm run dev
 ```
 
-Vite geliştirme sunucusunun gösterdiği adresi (varsayılan `http://localhost:5173`) tarayıcıda açın. Backend'i ayrı bir terminalde `backend/` içinden `npm run dev` komutuyla başlatın.
+Vite geliştirme sunucusunun gösterdiği adresi (varsayılan `http://localhost:5173`) tarayıcıda açın. Backend'i ayrı bir terminalde `backend/` içinden `node server.js` komutuyla başlatın.
 
 ## Geliştirme komutları
 
@@ -72,7 +72,7 @@ src/
 | Kimlik doğrulama | Backend imzalı `woodenart_session` HTTP-only çerezi (7 gün) | JavaScript okuyamaz; uygulama açılışında/route geçişlerinde `/api/auth/me` ile doğrulanır. Eski `localStorage`/`sessionStorage` rol ve kullanıcı ID anahtarları kimlik kaynağı değildir ve temizlenir. |
 | Kullanıcı profili | MySQL `users` | Yenileme ve yeni oturumda doğrulanmış kullanıcı ID'si üzerinden sunucudan alınır. |
 | Sepet | Tarayıcı `localStorage` | `woodenart_cart_<u_id>` kullanıcıya, `woodenart_cart_guest` misafire aittir. Aynı profil ve cihazda yenileme/çıkış/giriş sonrasında ayrı sepetler açılır; hesaplar birbirine aktarılmaz. |
-| Kayıtlı teslimat adresleri | MySQL `adresses`, `u_id` ile kullanıcıya bağlı | Oturum açılınca API'den tekrar yüklenir. Checkout'ta yeni bir başlık seçilip kaydetme kutusu işaretlenirse adres eklenir; mevcut kayıtlı başlıkta kutu devre dışıdır. |
+| Kayıtlı teslimat adresleri | MySQL `adresses`, `u_id` ile kullanıcıya bağlı | Oturum açılınca API'den tekrar yüklenir. Kullanıcı alanında eklenebilir, güncellenebilir ve silinebilir. Checkout'ta kayıtlı adres düzenlemesi açıkça işaretlenerek kaydedilir; kayıtlı olmayan başlıkta yeni adres oluşturulabilir. |
 | Oluşturulmuş siparişler | MySQL `orders` | `u_id` olan siparişler hesabın sipariş listesinde görünür; liste yetkisi sunucuda uygulanır. |
 | Checkout taslağı ve kart alanları | Kalıcı olarak saklanmaz | Yenilemede kaydedilmemiş form alanları kaybolabilir. Kart numarası, son kullanma tarihi ve CVV API'ye gönderilmez ve projede saklanmaz. |
 
@@ -95,6 +95,10 @@ src/
 | `/checkout` | `Checkout.vue` | Sepet özeti ve sipariş oluşturma; oturum gerekir |
 
 Router geçişlerinde `GET /api/auth/me` ile sunucu oturumu kontrol edilir. İstek `credentials: 'include'` ile HTTP-only oturum çerezini taşır. Korunan rotaya yetkisiz girişte router kullanıcıyı ana sayfaya yönlendirir.
+
+### Tarayıcı sekmesi markası
+
+`index.html`, tarayıcı sekmesi başlığını `Woodenart` olarak tanımlar ve favicon olarak `src/assets/img/woodenart3.png` marka görselini kullanır. Başlık veya ikon değiştirilirken bu `<title>` ve `rel="icon"` tanımları güncellenmelidir. Vite başlangıç ikonu `src/assets/logo.svg` kullanılmaz.
 
 ## Uygulama durumu ve API
 
@@ -122,7 +126,7 @@ Sayfalar geliştirme ortamında backend için `http://localhost:3001` kullanır.
 - `GET /api/productPage?type=2`: devam eden çalışmalar.
 - `GET /api/productPage?type=3`: araçlar.
 
-Navbar araması bu üç kataloğu tarar ve `productNameMatches` ile ürün adlarını eşleştirir. Karşılaştırma Türkçe harf/aksan farklılıklarını normalize eder; birden çok kelimede bütün terimler ürün adında aranır. Sonuç seçildiğinde katalog sayfası `search` query parametresiyle açılır ve eşleşen kartlar filtrelenir.
+Navbar araması bu üç kataloğu tarar ve `productNameMatches` ile ürün adlarını eşleştirir. Karşılaştırma Türkçe harf/aksan farklılıklarını normalize eder; birden çok kelimede bütün terimler ürün adında aranır. Sonuç seçildiğinde doğru katalog sayfası `search` ve seçilen kaydın `p_id` query parametreleriyle açılır. Hedef katalog `p_id` mevcutsa yalnızca o ürünü gösterir; `p_id` olmadan arama terimiyle açıldığında eşleşen ürünleri listelemeyi sürdürür. Seçim akışı ürünler (`/products`), devam eden çalışmalar (`/coming`) ve araçlar (`/tools`) kataloglarında ortaktır.
 
 ## Kullanıcı senaryoları
 
@@ -156,7 +160,7 @@ Navbar araması bu üç kataloğu tarar ve `productNameMatches` ile ürün adlar
 2. Yükleniyor durumu ve sonuç listesi navbar arama alanının altında görünür.
 3. Ürün adı; büyük/küçük harf, Türkçe karakter/aksan farklılığı ve kelime sırası değişse de eşleşebilir.
 4. Sonuç yoksa açık bir boş sonuç mesajı gösterilir. API erişilemiyorsa hata mesajı gösterilir.
-5. Bir sonucu seçince doğru katalog sayfası açılır ve aranan adla eşleşen ürünler kalır; katalog kartına basınca mevcut galeri modalı açılır.
+5. Bir sonucu seçince doğru katalog sayfası `search` ve seçilen ürünün `p_id` query değerleriyle açılır. Ürün, devam eden çalışma veya araç kataloğu yalnızca seçilen `p_id` değerine ait kartı gösterir; karta basınca mevcut galeri modalı açılır. Sayfa `p_id` olmadan yalnız arama metniyle açıldığında eşleşen bütün ürünler listelenmeye devam eder.
 
 Örnek kontrol: `Tavus Kuşu` ürün adı için `tavus kus` araması sonuç vermeli; ilgisiz bir kelime sonuç vermemelidir.
 Arama düğmesi görsel olarak yalnızca ikon gösterir; ekran okuyucular için erişilebilir adı korunur.
@@ -171,22 +175,34 @@ Arama düğmesi görsel olarak yalnızca ikon gösterir; ekran okuyucular için 
 6. Kullanıcı A'nın sepetinde ürün varken çıkış yapıp kullanıcı B ile giriş yapın; B'nin sepeti ayrı yüklenmeli, A'nın sepeti A tekrar giriş yapınca geri gelmelidir. Misafir sepeti de kullanıcı sepetleriyle karışmamalıdır.
 7. Sayfayı yenileyin: etkin sahibin sepeti korunmalı; DB'de kaydedilmiş kullanıcı profili, adresleri ve siparişleri backend'den tekrar yüklenmelidir.
 8. Boş sepet ödeme adımına geçememeli; `/checkout` oturum gerektirmelidir. Checkout sayfasındaki henüz kaydedilmemiş adres/form taslağının yenilemede korunmadığını doğrulayın.
-9. Checkout alanlarında tarayıcı zorunlu alan kontrollerine ek olarak posta kodu 5-6 rakam, kart numarası 16 rakam, son kullanma tarihi `AA/YYYY` (ay `01`-`12`) ve CVV 3 rakam biçimiyle sınanmalıdır.
+9. Checkout alanlarında tarayıcı zorunlu alan kontrollerine ek olarak posta kodu 5-6 rakam, kart numarası 16 rakam, son kullanma tarihi `AA/YYYY` (ay `01`-`12`, yıl geçerli takvim yılından küçük olamaz) ve CVV 3 rakam biçimiyle sınanmalıdır.
 10. Kart verisinin `POST /api/orders` gövdesinde bulunmadığını doğrulayın. Gerçek kart doğrulaması/ödeme sağlayıcısı yoktur; kart alanlarını doldurmak para tahsil edildiği anlamına gelmez.
 11. Ürün fiyatını/değişen stoğu tarayıcı payload'ında değiştirerek sipariş tutarı ve stok kararının DB değerlerinden verildiğini doğrulayın. Stok/API hatasında sepet korunmalı; başarılı `201` yanıtından sonra temizlenmelidir.
-12. Kayıtlı adres yüklenmesini, yeni adres eklemeyi, mevcut adresi güncellemeyi ve hesaplar arasında adreslerin sızmamasını kontrol edin.
+12. Kayıtlı adres yüklenmesini ve checkout'ta bir kayıtlı başlık seçildiğinde adres alanlarının otomatik dolmasını kontrol edin.
+13. Kayıtlı adres üzerinde değişiklik yapın ve **Değişiklikleri kayıtlı adresime uygula** seçeneğini işaretleyerek sipariş gönderin. Adres güncellenmeli ve sonraki kullanımda yeni değerler yüklenmelidir. Seçenek işaretlenmezse kayıtlı adres aynı kalmalıdır.
+14. Kayıtlı olmayan adres başlığında **Bu bilgileri bir sonraki sefere kaydet** seçeneği yeni adres oluşturmalıdır. Başarısız adres kaydında sipariş gönderilmemeli ve hata gösterilmelidir.
+15. Son kullanma tarihinde geçen yıl reddedilmeli, mevcut takvim yılı ve sonrası kabul edilmeli; geçersiz ay ve biçim reddedilmelidir. Bu doğrulama geçerli yılın geçmiş ayını ayrıca kontrol etmez.
 
 ### İstemci checkout doğrulamaları ve sınırları
 
 - Posta kodu: 5 veya 6 ASCII rakam. Kart numarası: 16 rakam; ekranda dörderli boşlukla gösterilebilir. Son kullanma tarihi: `AA/YYYY` ve ay `01`-`12`. CVV: 3 rakam. Giriş sırasında rakam dışı karakterler temizlenir, alanlar uzunluklarına göre kırpılır.
 - Form ayrıca ad, soyad, TCKN, açık adres, ülke, il, ilçe, ödeme türü ve kart adı gibi alanlarda HTML `required` kontrolü kullanır. E-posta ve telefon formda isteğe bağlıdır.
-- Bu checkout helper'ları gerçek kart varlığını, Luhn kontrolünü veya son kullanma yılının gelecekte olmasını doğrulamaz. Kart alanları sunucuya aktarılmadığından bu sadece demo biçim kontrolüdür; ödeme sağlayıcısı entegrasyonu değildir.
-- Adres defterine kaydetme API'si ayrıca TCKN'nin 11 rakam olmasını, başlık/ülke/il/ilçe/adres uzunluklarını, ülkenin `countries` tablosunda bulunmasını, aynı başlığın tekrar etmemesini ve kullanıcı başına en fazla 3 adresi kontrol eder. Checkout'ta kayıtlı başlıkların adresi otomatik doldurulur; mevcut adresi düzenleme akışı kullanıcı arayüzünde sunulmaz.
+- Son kullanma tarihi `AA/YYYY` biçimindedir; ay `01`-`12` olmalı ve yıl mevcut takvim yılından küçük olmamalıdır. Geçerli yıl içindeki ay ayrıca geçmişte kalmış olabilir; ay/yıl bazında tam kart geçerliliği hesaplanmaz. Gerçek kart varlığı veya Luhn kontrolü yapılmaz. Kart alanları sunucuya aktarılmadığından bu yalnızca demo biçim kontrolüdür; ödeme sağlayıcısı entegrasyonu değildir.
+- Adres defterine kaydetme API'si ayrıca TCKN'nin 11 rakam olmasını, başlık/ülke/il/ilçe/adres uzunluklarını, ülkenin `countries` tablosunda bulunmasını, aynı başlığın tekrar etmemesini ve kullanıcı başına en fazla 3 adresi kontrol eder.
+
+### Kayıtlı teslimat adreslerini düzenleme
+
+- Kullanıcı alanındaki **Adresler** bölümünde kayıt kartının **Güncelle** düğmesi mevcut adresi formda düzenlemeye açar. Form aynı adresin başlığını koruyabilir; başka bir adresin kullandığı başlık seçilemez. **Değişiklikleri kaydet** `PUT /api/addresses/:id` çağırır, **İptal** formu temizleyip düzenleme modundan çıkarır. Güncelleme adres ekleme üst sınırına takılmaz.
+- Checkout'ta `Ev`, `İş` veya `Diğer` başlığı seçildiğinde eşleşen kayıtlı adresin TCKN, adres, ülke, il, ilçe ve posta kodu alanları otomatik doldurulur. Alanlar sipariş için düzenlenebilir; **Değişiklikleri kayıtlı adresime uygula** seçeneği işaretlenmeden bu düzenlemeler adres defterine yazılmaz.
+- Checkout güncelleme seçeneği işaretlenmişse mevcut kaydın `a_id` değeriyle `PUT /api/addresses/:id`, yeni başlık için **Bu bilgileri bir sonraki sefere kaydet** seçilmişse `POST /api/addresses` çağrısı sipariş isteğinden önce yapılır. Adres API'si hata verirse sipariş isteği gönderilmez ve hata kullanıcıya bildirilir. Başarılı kayıt/güncellemeden sonra sayfadaki adres listesi güncel değerlerle yenilenir.
+- Her iki ekrandaki adres istekleri `credentials: 'include'` ile oturum taşır. Backend adresi oturumdaki kullanıcının `u_id` değeriyle sınırlar; istemciden gelen başka kullanıcıya ait ID ile güncelleme yapılamaz.
 
 ### Siparişler ve yönetim tabloları
 
 - Kullanıcı siparişler alanında yalnızca kendi hesabına bağlı siparişleri görür; yönetici tüm siparişleri listeleyip yönetebilir.
 - Sipariş tarihleri kısa tarih biçiminde, tutarlar Türkçe yerel biçimde (ör. `16.800,00 TL`) gösterilir.
+- Yönetim panelindeki **Kullanıcılar** ve **Mesajlar** tablolarında `#1`, `#2` biçimindeki ilk sütun, API'den gelen mevcut liste sırasındaki satır indeksidir; kalıcı veritabanı ID'si değildir. Liste yenilendiğinde veya sıralama değiştiğinde bu sıra numarası değişebilir. Güncelleme/silme/yanıtlama işlemleri ekranda gösterilmeyen gerçek `u_id` ve `m_id` birincil anahtarlarıyla yapılır.
+- Diğer yönetim tablolarında, örneğin **Ürünler** ve **Siparişler** tablolarında gösterilen `p_id`/sipariş `id` veritabanı kaydının gerçek ID'sidir; `#` ile başlayan sıra numarası değildir. Bu ayrım yalnızca sunum biçimidir, API kimliklerini değiştirmez.
 - Yönetim tablolarındaki işlem düğmeleri dar laptop ekranlarında yer kazanmak için ikon kullanır; erişilebilir ad ve ipucu düğme üzerinde korunur.
 
 ### İletişim formu
@@ -230,7 +246,7 @@ Backend/DB test komutları ve veritabanı migration bilgisi için kök [README](
 
 ## Sorun giderme
 
-- **Katalog/iletişim API'si erişilemiyor:** `backend/` içinden `npm run dev` çalıştığını ve `http://localhost:3001/api/health` yanıtını kontrol edin.
+- **Katalog/iletişim API'si erişilemiyor:** `backend/` içinden `node server.js` çalıştığını ve `http://localhost:3001/api/health` yanıtını kontrol edin.
 - **Oturumlu kullanıcı alanları dolmuyor:** Tarayıcıda `woodenart_session` çerezinin gönderildiğini, `/api/auth/me` yanıtını ve CORS `credentials` ayarını kontrol edin. `userId` tek başına backend profili için yetkilendirme sağlamaz.
 - **Mesaj kaydolmuyor:** DevTools Network'te `POST /api/contact` durum kodu/yanıtını ve backend DB bağlantısını kontrol edin. DB şeması `backend/migrations/20261007_expand_contact_message_fields.sql` ile uyumlu olmalıdır.
 - **E-posta ile yanıt gitmiyor:** SMTP doğrulaması backend ortamında yapılır. `SMTP_USER`, Google Uygulama Şifresi `SMTP_APP_PASSWORD` ve backend'in en son `.env` ile yeniden başlatıldığını kontrol edin. Normal Gmail parolası kullanmayın.

@@ -18,7 +18,7 @@
         </thead>
         <tbody>
             <tr v-for="message, index in  messages" :key="message.m_id">
-                <td><label for="">{{ index + 1 }}</label></td>
+                <td><label for="">#{{ index + 1 }}</label></td>
                 <td><label for="">{{ message.m_firstName }} {{ message.m_lastName }}</label></td>
                 <td><label for="">{{ message.m_email }}</label></td>
                 

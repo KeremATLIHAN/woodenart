@@ -89,7 +89,7 @@
 
                                     </div>
                                     <div class="col-12 d-flex flex-wrap align-items-center gap-3">
-                                        <span class="form-label mb-0">Adres Başlığı:</span>
+                                        <span class="form-label mb-0">Kayıtlı Adreslerim:</span>
                                         <div v-for="label in addressLabels" :key="label"
                                             class="form-check form-check-inline mb-0">
                                             <input :id="`address-${label}`" v-model="selectedAddressLabel" type="radio"
@@ -150,10 +150,20 @@
                                         aynı</label>
                                 </div>
                                 <div class="form-check">
-                                    <input v-model="saveInfo" type="checkbox" class="form-check-input" id="save-info"
-                                        :disabled="!isAuthenticated || !addressesLoaded || selectedAddressIsSaved" />
-                                    <label class="form-check-label" for="save-info">Bu bilgileri bir sonraki sefere
-                                        kaydet</label>
+                                    <template v-if="selectedAddressIsSaved">
+                                        <input v-model="updateSavedAddress" type="checkbox" class="form-check-input"
+                                            id="update-saved-address" :disabled="!isAuthenticated || !addressesLoaded" />
+                                        <label class="form-check-label" for="update-saved-address">
+                                            Değişiklikleri kayıtlı adresime uygula
+                                        </label>
+                                    </template>
+                                    <template v-else>
+                                        <input v-model="saveInfo" type="checkbox" class="form-check-input"
+                                            id="save-info" :disabled="!isAuthenticated || !addressesLoaded" />
+                                        <label class="form-check-label" for="save-info">
+                                            Bu bilgileri bir sonraki sefere kaydet
+                                        </label>
+                                    </template>
                                 </div>
                                 <hr class="my-4" />
                                 <h4 class="mb-3">Ödeme</h4>
@@ -270,6 +280,7 @@ export default {
             selectedAddressLabel: "Ev",
             isAuthenticated: false,
             saveInfo: false,
+            updateSavedAddress: false,
             checkoutLoadError: "",
             checkoutSubmitted: false,
         };
@@ -425,6 +436,7 @@ export default {
         },
         selectAddress(label) {
             this.saveInfo = false;
+            this.updateSavedAddress = false;
             this.selectedAddressLabel = label;
             this.order[0].addressType = label;
             const normalizedLabel = label.trim().toLocaleLowerCase("tr-TR");
@@ -458,12 +470,15 @@ export default {
             });
         },
         async saveCheckoutAddress() {
-            if (!this.saveInfo || !this.isAuthenticated) return;
+            if ((!this.saveInfo && !this.updateSavedAddress) || !this.isAuthenticated) return;
             if (!this.addressesLoaded) {
                 throw new Error("Kayıtlı adresler yüklenemediği için adresiniz kaydedilemedi.");
             }
             const address = this.order[0];
             const isUpdate = address.addressId !== null;
+            if (this.updateSavedAddress && !isUpdate) {
+                throw new Error("Güncellenecek kayıtlı adres bulunamadı. Lütfen adres seçiminizi kontrol edin.");
+            }
             const response = await fetch(
                 `${this.baseUrl}/api/addresses${isUpdate ? `/${address.addressId}` : ""}`,
                 {
@@ -506,6 +521,7 @@ export default {
                 this.addresses.splice(existingIndex, 1, savedAddress);
             }
             this.saveInfo = false;
+            this.updateSavedAddress = false;
         },
         async addUsers() {
             this.productMessage = null;

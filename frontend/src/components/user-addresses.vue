@@ -7,20 +7,22 @@
       </div>
     </div>
 
-    <form class="address-form" @submit.prevent="addAddress">
-      <h3>Yeni adres ekle</h3>
+    <form class="address-form" @submit.prevent="saveAddress">
+      <h3>{{ editingAddressId ? 'Adresi güncelle' : 'Yeni adres ekle' }}</h3>
       <label class="form-label" for="address-tckn">TCKN*</label>
       <input id="address-tckn" v-model.trim="form.tckn" class="form-control" type="text" inputmode="numeric"
         autocomplete="off" minlength="11" maxlength="11" pattern="[0-9]{11}"
         :class="{ 'is-invalid': tcknError }" :aria-describedby="tcknError ? 'address-tckn-error' : undefined"
-        :disabled="loading || limitReached" @input="tcknTouched = true" @blur="tcknTouched = true" required>
+        :disabled="loading || (limitReached && !editingAddressId)" @input="tcknTouched = true" @blur="tcknTouched = true" required>
       <small v-if="tcknError" id="address-tckn-error" class="text-danger" role="alert">
         TCKN tam olarak 11 rakamdan oluşmalıdır.
       </small>
-      <select id="address-label" v-model="form.label" class="form-select" :disabled="loading || limitReached" required>
+      <select id="address-label" v-model="form.label" class="form-select"
+        :disabled="loading || (limitReached && !editingAddressId)" required>
         <option disabled value="">Adres başlığı seçiniz</option>
-        <option v-for="label in addressLabels" :key="label" :value="label" :disabled="isLabelUsed(label)">
-          {{ label }}{{ isLabelUsed(label) ? ' (Kullanımda)' : '' }}
+        <option v-for="label in addressLabels" :key="label" :value="label"
+          :disabled="isLabelUsed(label, editingAddressId)">
+          {{ label }}{{ isLabelUsed(label, editingAddressId) ? ' (Kullanımda)' : '' }}
         </option>
       </select>
       <p v-if="selectedLabelUsed" class="text-danger mb-0" role="alert">
@@ -30,7 +32,7 @@
         <div class="address-field">
           <label class="form-label" for="address-country">Ülke*</label>
           <select id="address-country" v-model="form.country" class="form-select"
-            :disabled="countriesLoading || loading || limitReached" required>
+            :disabled="countriesLoading || loading || (limitReached && !editingAddressId)" required>
             <option disabled value="">{{ countriesLoading ? 'Ülkeler yükleniyor...' : 'Ülke seçiniz' }}</option>
             <option v-for="country in countries" :key="country.id" :value="country.country_name">
               {{ country.country_name }}
@@ -41,29 +43,36 @@
         <div class="address-field">
           <label class="form-label" for="address-province">İl*</label>
           <input id="address-province" v-model.trim="form.province" class="form-control" type="text" maxlength="100"
-            autocomplete="address-level1" :disabled="loading || limitReached" required>
+            autocomplete="address-level1" :disabled="loading || (limitReached && !editingAddressId)" required>
         </div>
         <div class="address-field">
           <label class="form-label" for="address-district">İlçe*</label>
           <input id="address-district" v-model.trim="form.district" class="form-control" type="text" maxlength="100"
-            autocomplete="address-level2" :disabled="loading || limitReached" required>
+            autocomplete="address-level2" :disabled="loading || (limitReached && !editingAddressId)" required>
         </div>
         <div class="address-field">
           <label class="form-label" for="address-postal-code">Posta kodu*</label>
           <input id="address-postal-code" v-model.trim="form.postalCode" class="form-control" type="text"
-            maxlength="20" autocomplete="postal-code" :disabled="loading || limitReached" required>
+            maxlength="20" autocomplete="postal-code" :disabled="loading || (limitReached && !editingAddressId)" required>
         </div>
       </div>
       <label class="form-label" for="address-text">Açık adres</label>
       <textarea id="address-text" v-model.trim="form.address" class="form-control" rows="4" maxlength="1000"
-        placeholder="Mahalle, cadde, bina ve daire bilgileri" :disabled="loading || limitReached" required />
+        placeholder="Mahalle, cadde, bina ve daire bilgileri"
+        :disabled="loading || (limitReached && !editingAddressId)" required />
       <p v-if="error" class="alert alert-danger mt-3 mb-0" role="alert">{{ error }}</p>
 
 
-      <button class="btn wooden-btn mt-3" type="submit"
-        :disabled="saving || loading || limitReached || selectedLabelUsed">
-        {{ saving ? 'Kaydediliyor...' : 'Adresi kaydet' }}
-      </button>
+      <div class="address-form-actions">
+        <button class="btn wooden-btn mt-3" type="submit"
+          :disabled="saving || loading || (limitReached && !editingAddressId) || selectedLabelUsed">
+          {{ saving ? 'Kaydediliyor...' : editingAddressId ? 'Değişiklikleri kaydet' : 'Adresi kaydet' }}
+        </button>
+        <button v-if="editingAddressId" class="btn btn-outline-secondary mt-3" type="button"
+          :disabled="saving" @click="cancelEditing">
+          İptal
+        </button>
+      </div>
       <p v-if="loading" class="address-limit-notice" role="status">
         Kayıtlı adresleriniz kontrol ediliyor...
       </p>
@@ -85,10 +94,16 @@
             <p>Posta kodu: {{ address.a_postal_code }}</p>
             <p>{{ address.a_address }}</p>
           </div>
-          <button class="btn btn-outline-danger btn-sm" type="button" :disabled="deletingId === address.a_id"
-            @click="deleteAddress(address.a_id)">
-            {{ deletingId === address.a_id ? 'Siliniyor...' : 'Sil' }}
-          </button>
+          <div class="address-actions">
+            <button class="btn btn-outline-primary btn-sm" type="button"
+              :disabled="loading || saving || deletingId !== null" @click="startEditing(address)">
+              Güncelle
+            </button>
+            <button class="btn btn-outline-danger btn-sm" type="button" :disabled="deletingId === address.a_id || saving"
+              @click="deleteAddress(address.a_id)">
+              {{ deletingId === address.a_id ? 'Siliniyor...' : 'Sil' }}
+            </button>
+          </div>
         </article>
       </template>
     </div>
@@ -120,6 +135,7 @@ export default {
       addressLabels: ['Ev', 'İş', 'Diğer'],
       loading: true,
       saving: false,
+      editingAddressId: null,
       deletingId: null,
       error: '',
     };
@@ -129,7 +145,7 @@ export default {
       return this.tcknTouched && !/^\d{11}$/.test(this.form.tckn);
     },
     selectedLabelUsed() {
-      return Boolean(this.form.label) && this.isLabelUsed(this.form.label);
+      return Boolean(this.form.label) && this.isLabelUsed(this.form.label, this.editingAddressId);
     },
     remainingAddresses() {
       return Math.max(0, 3 - this.addresses.length);
@@ -143,10 +159,11 @@ export default {
     this.loadAddresses();
   },
   methods: {
-    isLabelUsed(label) {
+    isLabelUsed(label, excludedId = null) {
       const normalizedLabel = label.trim().toLocaleLowerCase('tr-TR');
       return this.addresses.some(
-        (address) => String(address.a_label).trim().toLocaleLowerCase('tr-TR') === normalizedLabel
+        (address) => String(address.a_id) !== String(excludedId)
+          && String(address.a_label).trim().toLocaleLowerCase('tr-TR') === normalizedLabel
       );
     },
     async loadCountries() {
@@ -184,7 +201,36 @@ export default {
         this.loading = false;
       }
     },
-    async addAddress() {
+    startEditing(address) {
+      this.editingAddressId = address.a_id;
+      this.form = {
+        tckn: address.a_tckn,
+        label: address.a_label,
+        country: address.a_country,
+        province: address.a_province,
+        district: address.a_district,
+        postalCode: address.a_postal_code,
+        address: address.a_address,
+      };
+      this.tcknTouched = false;
+      this.error = '';
+      this.$el.querySelector('#address-tckn')?.focus();
+    },
+    cancelEditing() {
+      this.editingAddressId = null;
+      this.form = {
+        tckn: '',
+        label: '',
+        country: '',
+        province: '',
+        district: '',
+        postalCode: '',
+        address: '',
+      };
+      this.tcknTouched = false;
+      this.error = '';
+    },
+    async saveAddress() {
       if (this.saving) return;
       this.tcknTouched = true;
       if (!/^\d{11}$/.test(this.form.tckn)) {
@@ -194,8 +240,12 @@ export default {
       this.saving = true;
       this.error = '';
       try {
-        const response = await fetch(`${this.baseUrl}/api/addresses`, {
-          method: 'POST',
+        const isEditing = this.editingAddressId !== null;
+        const endpoint = isEditing
+          ? `${this.baseUrl}/api/addresses/${this.editingAddressId}`
+          : `${this.baseUrl}/api/addresses`;
+        const response = await fetch(endpoint, {
+          method: isEditing ? 'PUT' : 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(this.form),
@@ -204,18 +254,9 @@ export default {
         if (!response.ok) {
           throw new Error(data?.error || `Adres kaydedilemedi (HTTP ${response.status}).`);
         }
-        this.form = {
-          tckn: '',
-          label: '',
-          country: '',
-          province: '',
-          district: '',
-          postalCode: '',
-          address: '',
-        };
-        this.tcknTouched = false;
+        this.cancelEditing();
         await this.loadAddresses();
-        showSiteAlert('Adres başarıyla eklendi.');
+        showSiteAlert(isEditing ? 'Adres başarıyla güncellendi.' : 'Adres başarıyla eklendi.');
       } catch (error) {
         showSiteAlert(error.message || 'Adres kaydedilirken bir hata oluştu.', 'error');
       } finally {
@@ -235,6 +276,7 @@ export default {
           throw new Error(data?.error || `Adres silinemedi (HTTP ${response.status}).`);
         }
         this.addresses = this.addresses.filter((address) => address.a_id !== id);
+        if (String(this.editingAddressId) === String(id)) this.cancelEditing();
         showSiteAlert('Adres başarıyla silindi.');
       } catch (error) {
         showSiteAlert(error.message || 'Adres silinirken bir hata oluştu.', 'error');
@@ -284,6 +326,13 @@ export default {
   border: 1px solid rgba(94, 61, 39, 0.18);
   border-radius: 14px;
   background: rgba(255, 250, 245, 0.82);
+}
+
+.address-form-actions,
+.address-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .address-fields-grid {
@@ -344,6 +393,10 @@ export default {
 @media (max-width: 575.98px) {
   .address-fields-grid {
     grid-template-columns: 1fr;
+  }
+
+  .address-card {
+    flex-direction: column;
   }
 }
 </style>

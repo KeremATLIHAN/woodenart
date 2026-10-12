@@ -171,7 +171,7 @@
         </thead>
         <tbody>
             <tr v-for="(user, index) in users" :key="user.u_id">
-                <th scope="row">{{ index + 1 }}</th>
+                <th scope="row">#{{ index + 1 }}</th>
                 <td><input class="form-control" type="text" v-model="user.u_firstName"></td>
                 <td><input class="form-control" type="text" v-model="user.u_lastName"></td>
                 <td><input class="form-control" type="text" v-model="user.u_email"></td>
